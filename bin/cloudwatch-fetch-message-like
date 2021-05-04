@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+cloudwatch-fetch-query "@message like \"$1\""

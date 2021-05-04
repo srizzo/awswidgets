@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+trace_id=$1
+
+function fetch() {
+  local starting_token="$1"
+  aws xray batch-get-traces --max-items 5 --trace-ids "$trace_id" ${starting_token:+--starting-token "$starting_token"}
+}
+
+start=""
+while true; do
+  response=$(fetch "$start")
+  start=$(echo "$response" | jq -r '.NextToken // empty')
+  echo "$response" >"xray-trace ${trace_id}.json"
+
+  if [ -z "$start" ]; then
+    break
+  fi
+
+  echo "next token: $start"
+done

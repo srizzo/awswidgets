@@ -1,0 +1,24 @@
+---
+title: "X-Ray"
+output:
+    flexdashboard::flex_dashboard:
+        orientation: rows
+runtime: shiny
+params:
+    pwd: "."
+---
+
+```{r, include = F}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+library(dplyr, quietly = T)
+library(awswidgets, quietly = T)
+```
+```{css}
+.dataTable { white-space: nowrap; }
+```
+```{r}
+list.files(params$pwd, recursive = T, pattern = "xray-trace .*\\.json", full.names = T) %>%
+  xray_read %>%
+  xray_widget
+```

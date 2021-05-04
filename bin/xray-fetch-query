@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+START_TIME=${START_TIME:-"$(date -v '-6H' "+%Y-%m-%d %H:%M:%S")"}
+END_TIME=${END_TIME:-"$(date "+%Y-%m-%d %H:%M:%S")"}
+FILTER=${FILTER:-$1}
+
+printf "START_TIME=\"%s\" END_TIME=\"%s\" xray-search '%s'\n" "${START_TIME}" "${END_TIME}" "${FILTER}"
+
+function fetch() {
+  local starting_token="$1"
+  aws xray get-trace-summaries \
+    --start-time "$(date -j -f "%Y-%m-%d %H:%M:%S" "${START_TIME}" "+%s")" \
+    --end-time "$(date -j -f "%Y-%m-%d %H:%M:%S" "${END_TIME}" "+%s")" \
+    --no-sampling \
+    --max-items 5 \
+    ${FILTER:+--filter-expression "$FILTER"} \
+    ${starting_token:+--starting-token "$starting_token"}
+}
+
+start=""
+target_path_prefix="xray-trace-summaries ${FILTER//[\/\\]/_}"
+
+while true; do
+  response=$(fetch "$start")
+  echo "$response" >"${target_path_prefix} ${start:+-$start}.json"
+
+  start=$(echo "$response" | jq -r '.NextToken // empty')
+
+  if [ -z "$start" ]; then
+    break
+  fi
+
+  echo "next token: $start"
+done
+
+for result in "${target_path_prefix} "*; do
+  readarray -t trace_ids < <(
+    jq -r '[.TraceSummaries[] | .Id] | join("\n")' "$result"
+  )
+
+  for trace_id in "${trace_ids[@]}"; do
+    if [ -n "${trace_id}" ]; then
+      xray-fetch-trace "${trace_id}"
+    fi
+  done
+done

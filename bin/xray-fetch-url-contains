@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+xray-fetch-query "http.url CONTAINS \"$1\""

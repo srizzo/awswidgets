@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+START_TIME=${START_TIME:-"$(date -v '-6H' "+%Y-%m-%d %H:%M:%S")"}
+END_TIME=${END_TIME:-"$(date "+%Y-%m-%d %H:%M:%S")"}
+CLAUSE="$1"
+
+echo "LOG_GROUP_NAMES=\"$LOG_GROUP_NAMES\" START_TIME=\"$START_TIME\" END_TIME=\"$END_TIME\" cloudwatch-fetch-query \"$CLAUSE\""
+
+QUERY=$(
+  cat <<EOF
+          fields @timestamp, @message
+          | filter ${CLAUSE}
+          | sort @timestamp desc
+EOF
+)
+
+start_query_response=$(aws logs start-query \
+  --log-group-names $LOG_GROUP_NAMES \
+  --start-time "$(date -j -f "%Y-%m-%d %H:%M:%S" "${START_TIME}" "+%s")" \
+  --end-time "$(date -j -f "%Y-%m-%d %H:%M:%S" "${END_TIME}" "+%s")" \
+  --limit 5000 \
+  --query-string "$QUERY")
+
+query_id=$(echo "$start_query_response" | jq -r '.queryId')
+
+while true; do
+  sleep 0.5
+
+  response=$(aws logs get-query-results \
+    --query-id "$query_id")
+
+  status=$(echo "$response" | jq -r '.status')
+
+  target_path="${LOG_GROUP_NAMES} ${CLAUSE}.json"
+  target_path="cloudwatch ${target_path//[\/\\]/_}"
+
+  if [ "$status" = "Complete" ]; then
+    echo "$response" \
+      >"${target_path}"
+    break
+  fi
+
+  if [ -t 1 ]; then
+    echo "status: $status"
+  fi
+done

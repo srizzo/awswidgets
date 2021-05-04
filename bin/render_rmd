@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+Rscript -e "
+  options(warn=-1)
+  suppressPackageStartupMessages(
+    rmarkdown::render(
+      ifelse(file.exists('$1'), '$1', system.file('templates', '$1', package = 'awswidgets')),
+      params = list(pwd='$PWD'),
+      output_dir = '$PWD',
+      quiet = T
+    )
+  )
+"
+open "${1%.*}.html"
